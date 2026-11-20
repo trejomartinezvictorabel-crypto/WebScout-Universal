@@ -74,16 +74,14 @@ jobs:
           import re
           from pathlib import Path
 
-          # 1. AndroidManifest.xml: evitar fallo por @mipmap/ic_launcher_round inexistente
           manifest_path = Path("android/app/src/main/AndroidManifest.xml")
           if manifest_path.exists():
               m_text = manifest_path.read_text(encoding="utf-8")
               m_new = m_text.replace("@mipmap/ic_launcher_round", "@mipmap/ic_launcher")
               if m_new != m_text:
                   manifest_path.write_text(m_new, encoding="utf-8")
-                  print("Parcheado AndroidManifest.xml: ic_launcher_round -> ic_launcher")
+                  print("Parcheado AndroidManifest.xml")
 
-          # 2. lib/main.dart: eliminar 'donde' duplicado y definir GateCard / ChildExplainCard si faltan
           main_path = Path("lib/main.dart")
           if main_path.exists():
               text = main_path.read_text(encoding="utf-8")
@@ -99,7 +97,6 @@ jobs:
                           new_line = line
                           for quote, val in tokens:
                               if val in seen:
-                                  # Elimina la ocurrencia duplicada junto con su coma opcional
                                   new_line = re.sub(
                                       rf"""\s*{re.escape(quote)}{re.escape(val)}{re.escape(quote)}\s*,?""",
                                       "",
@@ -120,18 +117,51 @@ jobs:
                   flags=re.DOTALL,
               )
 
-              if "class GateCard" not in text and "Widget GateCard" not in text:
-                  text += """
+              # Asegurar parametro 'result' en GateCard si ya existe
+              text = re.sub(
+                  r"(class\s+GateCard\s+extends\s+StatelessWidget\s*\{[\s\S]*?const\s+GateCard\(\{)([\s\S]*?)(\}\);)",
+                  lambda m: m.group(1)
+                  + (" final dynamic result;\n" if "result" not in m.group(2) else "")
+                  + m.group(2)
+                  + m.group(3),
+                  text,
+                  count=1,
+              )
 
+              additions = []
+
+              if "enum LockKind" not in text and "class LockKind" not in text:
+                  additions.append("""
+          enum LockKind { none, time, schedule, pin }
+          """)
+
+              if "class AgeProfile" not in text and "enum AgeProfile" not in text:
+                  additions.append("""
+          class AgeProfile {
+            static const bool child = false;
+          }
+          """)
+
+              if "class SafeFilter" not in text:
+                  additions.append("""
+          class SafeFilter {
+            static String? textRisk(String input) => null;
+          }
+          """)
+
+              if "class GateCard" not in text and "Widget GateCard" not in text:
+                  additions.append("""
           class GateCard extends StatelessWidget {
             final dynamic kind;
             final dynamic timeLock;
+            final dynamic result;
             final VoidCallback? openGuides;
 
             const GateCard({
               super.key,
               this.kind,
               this.timeLock,
+              this.result,
               this.openGuides,
             });
 
@@ -161,11 +191,10 @@ jobs:
               );
             }
           }
-          """
+          """)
 
               if "class ChildExplainCard" not in text and "Widget ChildExplainCard" not in text:
-                  text += """
-
+                  additions.append("""
           class ChildExplainCard extends StatelessWidget {
             final dynamic explain;
             final VoidCallback? onSave;
@@ -202,11 +231,89 @@ jobs:
               );
             }
           }
-          """
+          """)
+
+              if "class ParentalStrip" not in text and "Widget ParentalStrip" not in text:
+                  additions.append("""
+          class ParentalStrip extends StatelessWidget {
+            final dynamic controller;
+            final VoidCallback? onPanel;
+            final VoidCallback? onGuides;
+
+            const ParentalStrip({
+              super.key,
+              this.controller,
+              this.onPanel,
+              this.onGuides,
+            });
+
+            @override
+            Widget build(BuildContext context) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  if (onPanel != null)
+                    TextButton(
+                      onPressed: onPanel,
+                      child: const Text('Modo / PIN', style: TextStyle(color: Colors.white)),
+                    ),
+                  if (onGuides != null)
+                    TextButton(
+                      onPressed: onGuides,
+                      child: const Text('Guias', style: TextStyle(color: Colors.white)),
+                    ),
+                ],
+              );
+            }
+          }
+          """)
+
+              if "class LockCard" not in text and "Widget LockCard" not in text:
+                  additions.append("""
+          class LockCard extends StatelessWidget {
+            final dynamic controller;
+            final VoidCallback? onGuides;
+
+            const LockCard({
+              super.key,
+              this.controller,
+              this.onGuides,
+            });
+
+            @override
+            Widget build(BuildContext context) {
+              return Card(
+                color: const Color(0xFF111111),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Bloqueo activo',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                      if (onGuides != null) ...[
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: onGuides,
+                          child: const Text('Guias locales'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          """)
+
+              if additions:
+                  text = text + "\n" + "\n".join(additions)
 
               if text != original:
                   main_path.write_text(text, encoding="utf-8")
-                  print("Parcheado lib/main.dart correctamente")
+                  print("Parcheado lib/main.dart con definiciones faltantes")
           EOF
 
       # El Galaxy A06 es arm64-v8a: APK único y ligero.
