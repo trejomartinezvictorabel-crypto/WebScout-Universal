@@ -428,8 +428,6 @@ jobs:
                   text = "import 'parental/parental.dart';\n" + text
 
               text = re.sub(r"\bconst\s+(GateResult\.block\s*\()", r"\1", text)
-
-              # Quitar 'await' mal colocado y permitir Future<GateResult>? en _gate
               text = re.sub(r"(_gate\s*=\s*)await\s+(g\b)", r"\1\2", text)
               text = re.sub(r"\bGateResult\?\s+_gate\b", "dynamic _gate", text)
 
@@ -445,7 +443,7 @@ jobs:
                   r"(Future<List<SearchItem>>\s+_profileWeb\s*\([^)]*\)\s*async\s*\{)([\s\S]*?)(\n  \})",
                   lambda m: m.group(1)
                   + m.group(2)
-                  + ("\n    return const <SearchItem>[];" if not m.group(2).rstrip().endswith(";") or "return <SearchItem>[]" not in m.group(2) else "")
+                  + ("\n    return const <SearchItem>[];" if "return " not in m.group(2) else "")
                   + m.group(3),
                   text,
                   count=1,
