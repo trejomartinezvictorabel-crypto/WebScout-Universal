@@ -1,1 +1,81 @@
+name: Build APK (WebScout Universal)
 
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Versiones
+        run: |
+          flutter --version
+          java -version
+
+      - name: Aceptar licencias del SDK de Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null 2>&1 || true
+
+      # El repo solo trae lib/, pubspec.yaml, AndroidManifest.xml y MainActivity.kt.
+      # Se genera el andamiaje Gradle estándar de Flutter SIN sobrescribir nuestros archivos.
+      - name: Generar andamiaje Android faltante
+        run: |
+          flutter create --platforms=android --org com.webscout --project-name webscout_universal /tmp/scaffold
+          cp -rn /tmp/scaffold/android/. android/ || true
+          grep -q "webscout/native" android/app/src/main/kotlin/com/webscout/webscout_universal/MainActivity.kt
+          grep -q "RECORD_AUDIO" android/app/src/main/AndroidManifest.xml
+          echo "Andamiaje listo; archivos propios preservados."
+
+      # minSdk 29 (MediaStore.Downloads) y target/compile >= 36 (Android 16)
+      - name: Ajustar SDKs (minSdk 29, target/compile >= 36)
+        run: |
+          F=android/app/build.gradle.kts
+          [ -f "$F" ] || F=android/app/build.gradle
+          echo "Editando $F"
+          sed -i -E 's/minSdk = flutter\.minSdkVersion/minSdk = 29/' "$F"
+          sed -i -E 's/targetSdk = flutter\.targetSdkVersion/targetSdk = maxOf(36, flutter.targetSdkVersion)/' "$F"
+          sed -i -E 's/compileSdk = flutter\.compileSdkVersion/compileSdk = maxOf(36, flutter.compileSdkVersion)/' "$F"
+          sed -i -E 's/minSdkVersion flutter\.minSdkVersion/minSdkVersion 29/' "$F"
+          sed -i -E 's/targetSdkVersion flutter\.targetSdkVersion/targetSdkVersion Math.max(36, flutter.targetSdkVersion)/' "$F"
+          sed -i -E 's/compileSdkVersion flutter\.compileSdkVersion/compileSdkVersion Math.max(36, flutter.compileSdkVersion)/' "$F"
+          grep -nE "minSdk|targetSdk|compileSdk" "$F" || true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Analizar (informativo)
+        continue-on-error: true
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # El Galaxy A06 es arm64-v8a: APK único y ligero.
+      - name: Compilar APK release (arm64)
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebScout-Universal-arm64
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
