@@ -429,17 +429,9 @@ jobs:
 
               text = re.sub(r"\bconst\s+(GateResult\.block\s*\()", r"\1", text)
 
-              # Agregar await en asignaciones a _gate si g es Future<GateResult>
-              text = re.sub(
-                  r"(_gate\s*=\s*)(?!await\s)(g\b)",
-                  r"\1await \2",
-                  text,
-              )
-              text = re.sub(
-                  r"(\b\w+\s*=\s*)(?!await\s)(_par\.gate[A-Za-z0-9_]+\s*\()",
-                  r"\1await \2",
-                  text,
-              )
+              # Quitar 'await' mal colocado y permitir Future<GateResult>? en _gate
+              text = re.sub(r"(_gate\s*=\s*)await\s+(g\b)", r"\1\2", text)
+              text = re.sub(r"\bGateResult\?\s+_gate\b", "dynamic _gate", text)
 
               if "class _HomePageState" in text and "GateKind get " not in text:
                   text = re.sub(
@@ -449,7 +441,6 @@ jobs:
                       count=1,
                   )
 
-              # Asegurar retorno en _profileWeb si puede llegar al final sin devolver lista
               text = re.sub(
                   r"(Future<List<SearchItem>>\s+_profileWeb\s*\([^)]*\)\s*async\s*\{)([\s\S]*?)(\n  \})",
                   lambda m: m.group(1)
