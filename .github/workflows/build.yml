@@ -82,14 +82,18 @@ jobs:
                   manifest_path.write_text(m_new, encoding="utf-8")
                   print("Parcheado AndroidManifest.xml")
 
-          # Crear lib/parental/parental.dart si falta
           parental_path = Path("lib/parental/parental.dart")
-          if not parental_path.exists():
-              parental_path.parent.mkdir(parents=True, exist_ok=True)
-              parental_path.write_text(
-                  """import 'package:flutter/material.dart';
+          parental_path.parent.mkdir(parents=True, exist_ok=True)
+          parental_path.write_text(
+              """import 'package:flutter/material.dart';
 
           enum LockKind { none, time, schedule, pin }
+
+          class GateKind {
+            static const String domain = 'domain';
+            static const String query = 'query';
+            static const String download = 'download';
+          }
 
           class AgeProfile {
             static const int adult = 0;
@@ -137,9 +141,28 @@ jobs:
           class ParentalController extends ChangeNotifier {
             int profile = AgeProfile.adult;
             bool isChild = false;
+            bool isMinor = false;
+            int effective = AgeProfile.adult;
             bool extraAllowed = false;
             LockKind lock = LockKind.none;
             String? timeLock;
+            Set<String> allowedDownloadExts = <String>{'pdf', 'txt', 'md'};
+
+            Future<void> load() async {}
+            void startTicking() {}
+            void setForeground(bool foreground) {}
+
+            Future<GateResult> gateUrl(String url, {String? ext, bool forDownload = false}) async {
+              return const GateResult(allowed: true);
+            }
+
+            Future<GateResult> gateQuery(String raw, {bool parentApproved = false}) async {
+              return const GateResult(allowed: true);
+            }
+
+            Future<GateResult> gateDownloadExt(String ext) async {
+              return const GateResult(allowed: true);
+            }
           }
 
           class ParentalSettingsPage extends StatelessWidget {
@@ -183,7 +206,12 @@ jobs:
             );
           }
 
-          Future<bool> askPin(BuildContext context, ParentalController controller) async => true;
+          Future<bool> askPin(
+            BuildContext context,
+            ParentalController controller, {
+            String? title,
+            String? subtitle,
+          }) async => true;
 
           class GateCard extends StatelessWidget {
             final dynamic kind;
@@ -191,6 +219,7 @@ jobs:
             final dynamic result;
             final dynamic onAlternative;
             final VoidCallback? onParentApprove;
+            final VoidCallback? onGuides;
             final VoidCallback? openGuides;
 
             const GateCard({
@@ -200,11 +229,13 @@ jobs:
               this.result,
               this.onAlternative,
               this.onParentApprove,
+              this.onGuides,
               this.openGuides,
             });
 
             @override
             Widget build(BuildContext context) {
+              final cb = onGuides ?? openGuides;
               return Card(
                 color: const Color(0xFF111111),
                 child: Padding(
@@ -223,10 +254,10 @@ jobs:
                           child: const Text('Aprobar con PIN'),
                         ),
                       ],
-                      if (openGuides != null) ...[
+                      if (cb != null) ...[
                         const SizedBox(height: 8),
                         ElevatedButton(
-                          onPressed: openGuides,
+                          onPressed: cb,
                           child: const Text('Abrir guias guardadas'),
                         ),
                       ],
@@ -346,9 +377,9 @@ jobs:
             }
           }
           """,
-                  encoding="utf-8",
-              )
-              print("Creado lib/parental/parental.dart")
+              encoding="utf-8",
+          )
+          print("Actualizado lib/parental/parental.dart")
 
           main_path = Path("lib/main.dart")
           if main_path.exists():
@@ -385,14 +416,20 @@ jobs:
                   flags=re.DOTALL,
               )
 
-              # Asegurar import de parental/parental.dart en main.dart
               if "parental/parental.dart" not in text:
                   text = "import 'parental/parental.dart';\n" + text
 
-              # Quitar 'const' antes de GateResult.block(...) si esta en contexto const
               text = re.sub(r"\bconst\s+(GateResult\.block\s*\()", r"\1", text)
 
-              # Asegurar retorno en _profileWeb si termina sin return explícito
+              # Agregar getter GateKind dentro de _HomePageState si falta
+              if "class _HomePageState" in text and "GateKind get " not in text:
+                  text = re.sub(
+                      r"(class\s+_HomePageState\s+extends\s+State<[^>]+>\s*\{)",
+                      r"\1\n  String get GateKind => 'domain';",
+                      text,
+                      count=1,
+                  )
+
               text = re.sub(
                   r"(Future<List<SearchItem>>\s+_profileWeb\s*\([^)]*\)\s*async\s*\{[\s\S]*?)(\n\s*\})",
                   lambda m: m.group(1) + ("\n    return <SearchItem>[];" if "return " not in m.group(1) else "") + m.group(2),
