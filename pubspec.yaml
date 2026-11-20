@@ -1,1 +1,37 @@
+name: webscout_universal
+description: WebScout Universal - buscador, vista dinámica, gestor ligero blindado y modo estudio seguro.
+publish_to: 'none'
+
+# ---------------------------------------------------------------------------
+# VERSIÓN  ->  <versionName>+<versionCode>
+#
+#   version: 1.0.0+1
+#            ^^^^^ ^
+#            |     versionCode (entero). Android lo exige ESTRICTAMENTE creciente.
+#            versionName (lo que ve el usuario)
+#
+# Para actualizar ENCIMA de la APK ya instalada (sin desinstalar):
+#   - Sube SIEMPRE el número después del "+":  1.0.0+1 -> 1.0.1+2 -> 1.1.0+3 -> ...
+#   - Usa el MISMO keystore (secrets KEYSTORE_*) y el MISMO applicationId
+#     (com.webscout.universal). Si cambia cualquiera de los dos, Android rechaza la actualización.
+# ---------------------------------------------------------------------------
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+# Todas las dependencias usan licencias permisivas (MIT / BSD-3-Clause).
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.6              # BSD-3-Clause · SHA-256 (descargas y PIN)
+  flutter_tts: ^4.2.5         # MIT          · lectura en voz alta
+  html: ^0.15.4               # BSD-3-Clause · extracción de texto/enlaces (Rayos X)
+  permission_handler: ^11.3.1 # MIT          · micrófono y notificaciones (bajo demanda)
+  shared_preferences: ^2.3.3  # BSD-3-Clause · historial, atajos, perfil parental, guías
+  speech_to_text: ^7.0.0      # BSD-3-Clause · entrada por voz
+  webview_flutter: ^4.10.0    # BSD-3-Clause · vista dinámica efímera
+
+flutter:
+  uses-material-design: true
 
