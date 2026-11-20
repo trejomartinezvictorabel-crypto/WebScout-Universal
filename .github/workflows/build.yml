@@ -117,11 +117,28 @@ jobs:
                   flags=re.DOTALL,
               )
 
-              # Asegurar parametro 'result' en GateCard si ya existe
+              # Asegurar constructor GateResult.block(...) si falta
+              text = re.sub(
+                  r"(class\s+GateResult\s*\{)",
+                  r"\1\n  const GateResult.block([dynamic a, dynamic b, dynamic c]);",
+                  text,
+                  count=1,
+              )
+
+              # Asegurar PreferredSizeWidget en ParentalStrip si ya existe
+              text = re.sub(
+                  r"class\s+ParentalStrip\s+extends\s+StatelessWidget\b(?!\s+implements\s+PreferredSizeWidget)",
+                  "class ParentalStrip extends StatelessWidget implements PreferredSizeWidget",
+                  text,
+                  count=1,
+              )
+
+              # Asegurar parametro onAlternative en GateCard si ya existe
               text = re.sub(
                   r"(class\s+GateCard\s+extends\s+StatelessWidget\s*\{[\s\S]*?const\s+GateCard\(\{)([\s\S]*?)(\}\);)",
                   lambda m: m.group(1)
                   + (" final dynamic result;\n" if "result" not in m.group(2) else "")
+                  + (" final dynamic onAlternative;\n" if "onAlternative" not in m.group(2) else "")
                   + m.group(2)
                   + m.group(3),
                   text,
@@ -135,10 +152,24 @@ jobs:
           enum LockKind { none, time, schedule, pin }
           """)
 
+              if "class GateResult" not in text:
+                  additions.append("""
+          class GateResult {
+            final bool allowed;
+            final String? reason;
+            const GateResult({this.allowed = true, this.reason});
+            const GateResult.block([dynamic a, dynamic b, dynamic c])
+                : allowed = false,
+                  reason = null;
+          }
+          """)
+
               if "class AgeProfile" not in text and "enum AgeProfile" not in text:
                   additions.append("""
           class AgeProfile {
             static const bool child = false;
+            static const int adult = 0;
+            static const int teen = 1;
           }
           """)
 
@@ -146,6 +177,33 @@ jobs:
                   additions.append("""
           class SafeFilter {
             static String? textRisk(String input) => null;
+            static String childSiteOperator(dynamic extraAllowed) => '';
+          }
+          """)
+
+              if "class ChildExplain" not in text:
+                  additions.append("""
+          class ChildExplain {
+            final String title;
+            final String body;
+            const ChildExplain({this.title = '', this.body = ''});
+            Map<String, dynamic> toGuide() => {'title': title, 'body': body};
+            @override
+            String toString() => title.isNotEmpty ? '$title\\n$body' : body;
+          }
+          """)
+
+              if "class GuideStore" not in text:
+                  additions.append("""
+          class GuideStore {
+            static Future<void> save(dynamic guide) async {}
+          }
+          """)
+
+              if "class StudyBuilder" not in text:
+                  additions.append("""
+          class StudyBuilder {
+            static Future<ChildExplain?> explainForChild(dynamic raw) async => null;
           }
           """)
 
@@ -155,6 +213,7 @@ jobs:
             final dynamic kind;
             final dynamic timeLock;
             final dynamic result;
+            final dynamic onAlternative;
             final VoidCallback? openGuides;
 
             const GateCard({
@@ -162,6 +221,7 @@ jobs:
               this.kind,
               this.timeLock,
               this.result,
+              this.onAlternative,
               this.openGuides,
             });
 
@@ -235,7 +295,7 @@ jobs:
 
               if "class ParentalStrip" not in text and "Widget ParentalStrip" not in text:
                   additions.append("""
-          class ParentalStrip extends StatelessWidget {
+          class ParentalStrip extends StatelessWidget implements PreferredSizeWidget {
             final dynamic controller;
             final VoidCallback? onPanel;
             final VoidCallback? onGuides;
@@ -246,6 +306,9 @@ jobs:
               this.onPanel,
               this.onGuides,
             });
+
+            @override
+            Size get preferredSize => const Size.fromHeight(48);
 
             @override
             Widget build(BuildContext context) {
