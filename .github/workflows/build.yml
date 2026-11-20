@@ -429,9 +429,14 @@ jobs:
 
               text = re.sub(r"\bconst\s+(GateResult\.block\s*\()", r"\1", text)
 
-              # Agregar await si se asigna Future<GateResult> a GateResult?
+              # Agregar await en asignaciones a _gate si g es Future<GateResult>
               text = re.sub(
-                  r"(GateResult\?\s+\w+\s*=\s*)(_par\.gate[A-Za-z0-9_]+\s*\()",
+                  r"(_gate\s*=\s*)(?!await\s)(g\b)",
+                  r"\1await \2",
+                  text,
+              )
+              text = re.sub(
+                  r"(\b\w+\s*=\s*)(?!await\s)(_par\.gate[A-Za-z0-9_]+\s*\()",
                   r"\1await \2",
                   text,
               )
@@ -444,9 +449,13 @@ jobs:
                       count=1,
                   )
 
+              # Asegurar retorno en _profileWeb si puede llegar al final sin devolver lista
               text = re.sub(
-                  r"(Future<List<SearchItem>>\s+_profileWeb\s*\([^)]*\)\s*async\s*\{[\s\S]*?)(\n\s*\})",
-                  lambda m: m.group(1) + ("\n    return <SearchItem>[];" if "return " not in m.group(1) else "") + m.group(2),
+                  r"(Future<List<SearchItem>>\s+_profileWeb\s*\([^)]*\)\s*async\s*\{)([\s\S]*?)(\n  \})",
+                  lambda m: m.group(1)
+                  + m.group(2)
+                  + ("\n    return const <SearchItem>[];" if not m.group(2).rstrip().endswith(";") or "return <SearchItem>[]" not in m.group(2) else "")
+                  + m.group(3),
                   text,
                   count=1,
               )
