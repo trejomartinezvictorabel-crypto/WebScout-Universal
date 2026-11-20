@@ -93,6 +93,7 @@ jobs:
             static const String domain = 'domain';
             static const String query = 'query';
             static const String download = 'download';
+            static const String timeLock = 'timeLock';
           }
 
           class AgeProfile {
@@ -109,15 +110,18 @@ jobs:
           class GateResult {
             final bool allowed;
             final String? reason;
+            final String kind;
             final bool parentCanOverride;
             const GateResult({
               this.allowed = true,
               this.reason,
+              this.kind = GateKind.domain,
               this.parentCanOverride = false,
             });
             const GateResult.block([dynamic a, dynamic b, dynamic c])
                 : allowed = false,
                   reason = b is String ? b : null,
+                  kind = a is String ? a : GateKind.domain,
                   parentCanOverride = true;
           }
 
@@ -146,13 +150,17 @@ jobs:
             bool extraAllowed = false;
             LockKind lock = LockKind.none;
             String? timeLock;
+            String safeSearchKp = '';
             Set<String> allowedDownloadExts = <String>{'pdf', 'txt', 'md'};
 
             Future<void> load() async {}
             void startTicking() {}
             void setForeground(bool foreground) {}
 
-            Future<GateResult> gateUrl(String url, {String? ext, bool forDownload = false}) async {
+            bool allowText(dynamic text) => true;
+            bool allowResult(dynamic url, [dynamic title, dynamic snippet]) => true;
+
+            Future<GateResult> gateUrl(dynamic url, {String? ext, bool forDownload = false}) async {
               return const GateResult(allowed: true);
             }
 
@@ -421,7 +429,13 @@ jobs:
 
               text = re.sub(r"\bconst\s+(GateResult\.block\s*\()", r"\1", text)
 
-              # Agregar getter GateKind dentro de _HomePageState si falta
+              # Agregar await si se asigna Future<GateResult> a GateResult?
+              text = re.sub(
+                  r"(GateResult\?\s+\w+\s*=\s*)(_par\.gate[A-Za-z0-9_]+\s*\()",
+                  r"\1await \2",
+                  text,
+              )
+
               if "class _HomePageState" in text and "GateKind get " not in text:
                   text = re.sub(
                       r"(class\s+_HomePageState\s+extends\s+State<[^>]+>\s*\{)",
